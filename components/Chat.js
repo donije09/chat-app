@@ -3,36 +3,36 @@ import { View, Platform, Alert, KeyboardAvoidingView } from 'react-native';
 import { GiftedChat, InputToolbar } from 'react-native-gifted-chat';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '../App'; // Import Firestore instance
+import { db } from '../App';
+import CustomActions from './CustomActions';
+import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 
 const Chat = ({ route }) => {
-  const { _id, name, bgColor, isConnected } = route.params;
+  const { _id, name, bgColor, isConnected, storage } = route.params;
   const [messages, setMessages] = useState([]);
 
   useEffect(() => {
     let unsubscribe;
     if (isConnected) {
-      // Fetch messages from Firestore in real time
       const q = query(collection(db, 'messages'), orderBy('createdAt', 'desc'));
       unsubscribe = onSnapshot(q, (snapshot) => {
         const messagesFirestore = snapshot.docs.map(doc => {
           const firebaseData = doc.data();
-
-          const data = {
+          return {
             _id: doc.id,
             text: firebaseData.text,
             createdAt: new Date(firebaseData.createdAt.seconds * 1000),
-            user: firebaseData.user
+            user: firebaseData.user,
+            image: firebaseData.image || null,
+            location: firebaseData.location || null,
           };
-
-          return data;
         });
         setMessages(messagesFirestore);
-        cacheMessages(messagesFirestore); // Cache messages
+        cacheMessages(messagesFirestore);
       });
     } else {
-      loadCachedMessages(); // Load cached messages when offline
-      showConnectionLostAlert(); // Show connection lost alert
+      loadCachedMessages();
+      showConnectionLostAlert();
     }
 
     return () => {
@@ -40,7 +40,6 @@ const Chat = ({ route }) => {
     };
   }, [isConnected]);
 
-  // Cache messages in AsyncStorage
   const cacheMessages = async (messagesToCache) => {
     try {
       await AsyncStorage.setItem('messages', JSON.stringify(messagesToCache));
@@ -49,7 +48,6 @@ const Chat = ({ route }) => {
     }
   };
 
-  // Load cached messages from AsyncStorage
   const loadCachedMessages = async () => {
     try {
       const cachedMessages = await AsyncStorage.getItem('messages');
@@ -61,12 +59,10 @@ const Chat = ({ route }) => {
     }
   };
 
-  // Show an alert when connection is lost
   const showConnectionLostAlert = () => {
     Alert.alert('Connection Lost', 'You are now offline. You cannot send messages.');
   };
 
-  // Disable the input toolbar when offline
   const renderInputToolbar = (props) => {
     if (isConnected) {
       return <InputToolbar {...props} />;
@@ -80,21 +76,36 @@ const Chat = ({ route }) => {
     );
   };
 
-  return (
-    <View style={{ flex: 1, backgroundColor: bgColor }}>
-      <GiftedChat
-        messages={messages}
-        onSend={(messages) => onSend(messages)}
-        user={{
-          _id: _id,
-          name: name
-        }}
-        renderInputToolbar={renderInputToolbar} // Disable toolbar when offline
+  const renderCustomActions = (props) => {
+    return (
+      <CustomActions
+        {...props}
+        onSend={onSend}
+        userID={_id}
+        name={name}
+        storage={storage}
       />
-      {Platform.OS === 'android' || Platform.OS === 'ios' ? (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} />
-      ) : null}
-    </View>
+    );
+  };
+
+  return (
+    <ActionSheetProvider>
+      <View style={{ flex: 1, backgroundColor: bgColor }}>
+        <GiftedChat
+          messages={messages}
+          onSend={(messages) => onSend(messages)}
+          user={{
+            _id: _id,
+            name: name,
+          }}
+          renderInputToolbar={renderInputToolbar}
+          renderActions={renderCustomActions}
+        />
+        {Platform.OS === 'android' || Platform.OS === 'ios' ? (
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} />
+        ) : null}
+      </View>
+    </ActionSheetProvider>
   );
 };
 
