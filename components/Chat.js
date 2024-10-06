@@ -8,12 +8,27 @@ import CustomActions from './CustomActions';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 
 const Chat = ({ route }) => {
-  const { _id, name, bgColor, isConnected, storage } = route.params;
+  const { _id, name, bgColor, isConnected } = route.params;
   const [messages, setMessages] = useState([]);
 
+  // Function to map Firestore message data
+  const mapFirestoreData = (doc) => {
+    const firebaseData = doc.data();
+    return {
+      _id: doc.id,
+      text: firebaseData.text || '',
+      createdAt: new Date(firebaseData.createdAt.seconds * 1000),
+      user: firebaseData.user,
+      image: firebaseData.image || null,
+      location: firebaseData.location || null,
+    };
+  };
+
+  // Effect for syncing messages based on connection status
   useEffect(() => {
     let unsubscribe;
     if (isConnected) {
+      // Fetch messages from Firestore in real time
       const q = query(collection(db, 'messages'), orderBy('createdAt', 'desc'));
       unsubscribe = onSnapshot(q, (snapshot) => {
         const messagesFirestore = snapshot.docs.map(doc => {
@@ -28,11 +43,11 @@ const Chat = ({ route }) => {
           };
         });
         setMessages(messagesFirestore);
-        cacheMessages(messagesFirestore);
+        cacheMessages(messagesFirestore); // Cache messages
       });
     } else {
-      loadCachedMessages();
-      showConnectionLostAlert();
+      loadCachedMessages(); // Load cached messages when offline
+      showConnectionLostAlert(); // Show connection lost alert
     }
 
     return () => {
@@ -64,12 +79,10 @@ const Chat = ({ route }) => {
   };
 
   const renderInputToolbar = (props) => {
-    if (isConnected) {
-      return <InputToolbar {...props} />;
-    }
-    return null;
+    return isConnected ? <InputToolbar {...props} /> : null;
   };
 
+  // Handle sending messages
   const onSend = (newMessages = []) => {
     setMessages((previousMessages) =>
       GiftedChat.append(previousMessages, newMessages)

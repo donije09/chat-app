@@ -4,9 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, enableNetwork, disableNetwork } from 'firebase/firestore';
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import { getStorage } from 'firebase/storage';
-import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+import { getAuth } from 'firebase/auth';
 import Start from './components/Start';
 import Chat from './components/Chat';
 
@@ -23,12 +21,9 @@ const firebaseConfig = {
 // Initialize Firebase app
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore, Firebase Auth with persistence, and Storage
+// Initialize Firestore and Firebase Auth
 const db = getFirestore(app);
-const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(ReactNativeAsyncStorage),
-});
-const storage = getStorage(app);
+const auth = getAuth(app);
 
 const Stack = createStackNavigator();
 
@@ -37,32 +32,26 @@ const App = () => {
 
   useEffect(() => {
     if (netInfo.isConnected === false) {
-      disableNetwork(db)
-        .catch((error) => console.error("Failed to disable Firestore network", error));
+      disableNetwork(db); // Disable Firestore when offline
     } else if (netInfo.isConnected === true) {
-      enableNetwork(db)
-        .catch((error) => console.error("Failed to enable Firestore network", error));
+      enableNetwork(db); // Enable Firestore when online
     }
   }, [netInfo.isConnected]);
 
   return (
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Start">
-        <Stack.Screen 
-          name="Start" 
-          component={Start} 
-          options={{ title: 'Welcome' }}
-        />
+        <Stack.Screen name="Start" component={Start} />
         <Stack.Screen
           name="Chat"
           component={Chat}
           options={({ route }) => ({ title: route.params.name })}
-          initialParams={{ isConnected: netInfo.isConnected }}
+          initialParams={{ isConnected: netInfo.isConnected }} // Pass connection status to Chat.js
         />
       </Stack.Navigator>
     </NavigationContainer>
   );
 };
 
-export { db, auth, storage };
+export { db, auth };
 export default App;
