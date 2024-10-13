@@ -6,6 +6,8 @@ import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../App';
 import CustomActions from './CustomActions';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
+import MapView from 'react-native-maps';
+
 
 const Chat = ({ route }) => {
   const { _id, name, bgColor, isConnected, storage } = route.params;
@@ -88,6 +90,30 @@ const Chat = ({ route }) => {
     );
   };
 
+  const renderCustomView = (props) => {
+    //Using object destructuring 
+    const { currentMessage } = props;
+    if (currentMessage.location) {
+      return (
+        <MapView
+          style={{
+            width: 150,
+            height: 100,
+            borderRadius: 13,
+            margin: 3
+          }}
+          region={{
+            latitude: currentMessage.location.latitude,
+            longitude: currentMessage.location.longitude,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          }}
+        />
+      );
+    }
+    return null;
+  }
+
   return (
     <ActionSheetProvider>
       <View style={{ flex: 1, backgroundColor: bgColor }}>
@@ -100,6 +126,7 @@ const Chat = ({ route }) => {
           }}
           renderInputToolbar={renderInputToolbar}
           renderActions={renderCustomActions}
+          renderCustomView={renderCustomView}
         />
         {Platform.OS === 'android' || Platform.OS === 'ios' ? (
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} />

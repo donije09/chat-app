@@ -5,8 +5,9 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { v4 as uuidv4 } from 'uuid';
+import { storage, db, auth } from '../App';  // Import storage from App.js
 
-const CustomActions = ({ wrapperStyle, iconTextStyle, storage, onSend, userID, name }) => {
+const CustomActions = ({ wrapperStyle, iconTextStyle, onSend, userID, name }) => {
   const actionSheet = useActionSheet();
 
   const generateReference = (uri) => {
@@ -38,42 +39,40 @@ const CustomActions = ({ wrapperStyle, iconTextStyle, storage, onSend, userID, n
 
   const uploadAndSendImage = async (imageURI) => {
     try {
-      if (!imageURI) {
-        throw new Error('Image URI is invalid');
-      }
-      
-      console.log('Uploading image:', imageURI); // Log the image URI
-  
+      // Generate a unique reference string and fetch the image
       const uniqueRefString = generateReference(imageURI);
-      const newUploadRef = ref(storage, uniqueRefString);
-      
-      // Fetch the image as a blob
+      const newUploadRef = ref(storage, uniqueRefString); // Use imported storage directly
       const response = await fetch(imageURI);
+      
       if (!response.ok) {
-        throw new Error(`Failed to fetch image: ${response.statusText}`);
+        throw new Error('Failed to fetch the image.');
       }
-      
+
+      // Convert the image to a blob
       const blob = await response.blob();
-      
-      // Upload the blob to Firebase
-      await uploadBytes(newUploadRef, blob);
-      const imageURL = await getDownloadURL(newUploadRef);
-      
+
+      // Upload the blob to Firebase storage
+      const snapshot = await uploadBytes(newUploadRef, blob);
+
+      // Get the download URL of the uploaded image
+      const imageURL = await getDownloadURL(snapshot.ref);
+
+      // Create the image message
       const imageMessage = {
         _id: uuidv4(),
-        text: '',
+        text: "",
         createdAt: new Date(),
         user: { _id: userID, name: name },
         image: imageURL,
       };
-      
+
+      // Send the image message using onSend callback
       onSend([imageMessage]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to upload and send the image.');
       console.error('Image upload error:', error);
+      Alert.alert('Error', 'Failed to upload and send the image.');
     }
   };
-  
 
   const pickImage = async () => {
     try {
@@ -82,20 +81,18 @@ const CustomActions = ({ wrapperStyle, iconTextStyle, storage, onSend, userID, n
         Alert.alert('Permission Required', 'Permission to access media library is required.');
         return;
       }
-  
+
       let result = await ImagePicker.launchImageLibraryAsync();
-      if (!result.canceled) {
-        // Log the image URI to verify
+      if (!result.canceled && result.assets && result.assets.length > 0) {
         console.log('Selected Image URI:', result.assets[0].uri);
-        await uploadAndSendImage(result.assets[0].uri);  // Pass URI to upload function
+        await uploadAndSendImage(result.assets[0].uri);
       } else {
-        console.log('Image selection canceled.');
+        console.log('Image selection canceled or no assets found.');
       }
     } catch (error) {
       console.error('Error picking image:', error);
     }
   };
-  
 
   const takePhoto = async () => {
     try {
@@ -104,12 +101,11 @@ const CustomActions = ({ wrapperStyle, iconTextStyle, storage, onSend, userID, n
         Alert.alert('Permission Required', 'Permission to access camera is required.');
         return;
       }
-  
+
       let result = await ImagePicker.launchCameraAsync();
-      if (!result.canceled) {
-        // Log the image URI to verify
+      if (!result.canceled && result.assets && result.assets.length > 0) {
         console.log('Captured Image URI:', result.assets[0].uri);
-        await uploadAndSendImage(result.assets[0].uri);  // Pass URI to upload function
+        await uploadAndSendImage(result.assets[0].uri);
       } else {
         console.log('Camera operation canceled.');
       }
@@ -117,17 +113,28 @@ const CustomActions = ({ wrapperStyle, iconTextStyle, storage, onSend, userID, n
       console.error('Error taking photo:', error);
     }
   };
-  
 
   const getLocation = async () => {
     try {
-      let permissionResult = await Location.requestForegroundPermissionsAsync();
-      if (permissionResult.granted) {
-        const location = await Location.getCurrentPositionAsync({});
-        if (location) {
+      // Request permission to access the location
+      let permissions = await Location.requestForegroundPermissionsAsync();
+  
+      // Check if permission is granted
+      if (permissions?.granted) {
+        // Get the current location with higher accuracy
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Highest,  // Use Balanced if this causes delay
+        });
+  
+        // Log the location to help debug
+        console.log("Retrieved location:", location);
+  
+        // Check if location data is available
+        if (location && location.coords) {
+          // Format the message with the correct data (no undefined values)
           const locationMessage = {
             _id: uuidv4(),
-            text: '',
+            text: "",
             createdAt: new Date(),
             user: { _id: userID, name: name },
             location: {
@@ -137,16 +144,18 @@ const CustomActions = ({ wrapperStyle, iconTextStyle, storage, onSend, userID, n
           };
           onSend([locationMessage]);
         } else {
-          Alert.alert('Error', 'Location data is not available.');
+          Alert.alert("Location data is not available.");
         }
       } else {
-        Alert.alert('Permission Denied', 'Location access denied.');
+        Alert.alert("Location access denied. Please enable location access.");
       }
     } catch (error) {
-      console.error('Error fetching location:', error);
-      Alert.alert('Error', 'An error occurred while fetching location.');
+      // Log any errors that occur during the process
+      console.error("Error in getLocation function:", error);
+      Alert.alert("An error occurred while fetching location.");
     }
   };
+  
 
   return (
     <TouchableOpacity style={styles.container} onPress={onActionPress}>
